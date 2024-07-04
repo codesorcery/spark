@@ -32,3 +32,8 @@ line-length = 100
 target-version = ['py39']
 include = '\.pyi?$'
 extend-exclude = 'cloudpickle|error_classes.py'
+
+[tool.ruff.lint]
+select = [
+    "NPY201", # Numpy 2 compatibility checks
+]

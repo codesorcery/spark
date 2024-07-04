@@ -21,6 +21,8 @@ MINIMUM_FLAKE8="3.9.0"
 MINIMUM_MYPY="1.8.0"
 MYPY_BUILD="mypy"
 PYTEST_BUILD="pytest"
+RUFF_BUILD="ruff"
+MINIMUM_RUFF="0.2.0"
 
 PYTHON_EXECUTABLE="${PYTHON_EXECUTABLE:-python3}"
 
@@ -61,6 +63,9 @@ while (( "$#" )); do
     --mypy-data)
       MYPY_DATA_TEST=true
       ;;
+    --ruff)
+      RUFF_TEST=true
+      ;;
     *)
       echo "Error: $1 is not supported"
       exit_with_usage
@@ -69,7 +74,7 @@ while (( "$#" )); do
   shift
 done
 
-if [[ -z "$COMPILE_TEST$BLACK_TEST$PYSPARK_CUSTOM_ERRORS_CHECK_TEST$FLAKE8_TEST$MYPY_TEST$MYPY_EXAMPLES_TEST$MYPY_DATA_TEST" ]]; then
+if [[ -z "$COMPILE_TEST$BLACK_TEST$PYSPARK_CUSTOM_ERRORS_CHECK_TEST$FLAKE8_TEST$MYPY_TEST$MYPY_EXAMPLES_TEST$MYPY_DATA_TEST$RUFF_TEST" ]]; then
   COMPILE_TEST=true
   BLACK_TEST=true
   PYSPARK_CUSTOM_ERRORS_CHECK_TEST=true
@@ -77,6 +82,7 @@ if [[ -z "$COMPILE_TEST$BLACK_TEST$PYSPARK_CUSTOM_ERRORS_CHECK_TEST$FLAKE8_TEST$
   MYPY_TEST=true
   MYPY_EXAMPLES_TEST=true
   MYPY_DATA_TEST=true
+  RUFF_TEST=true
 fi
 
 function satisfies_min_version {
@@ -204,7 +210,6 @@ function mypy_examples_test {
     fi
 }
 
-
 function mypy_test {
     if ! hash "$MYPY_BUILD" 2> /dev/null; then
         echo "The $MYPY_BUILD command was not found. Skipping for now."
@@ -316,6 +321,35 @@ function pyspark_custom_errors_check_test {
     fi
 }
 
+function ruff_test {
+    if ! hash "$RUFF_BUILD" 2> /dev/null; then
+        echo "The $RUFF_BUILD command was not found. Skipping for now."
+        return
+    fi
+
+    _RUFF_VERSION=($($RUFF_BUILD --version))
+    RUFF_VERSION="${_RUFF_VERSION[1]}"
+    EXPECTED_RUFF="$(satisfies_min_version $RUFF_VERSION $MINIMUM_RUFF)"
+
+    if [[ "$EXPECTED_RUFF" == "False" ]]; then
+        echo "The minimum ruff version needs to be $MINIMUM_RUFF. Your current version is $RUFF_VERSION. Skipping for now."
+        return
+    fi
+
+    echo "starting ruff test..."
+    RUFF_REPORT=$( $RUFF_BUILD check python/ --config dev/pyproject.toml )
+    RUFF_STATUS=$?
+    if [ "$RUFF_STATUS" -ne 0 ]; then
+        echo "ruff checks failed:"
+        echo "$RUFF_REPORT"
+        echo "$RUFF_STATUS"
+        exit "$RUFF_STATUS"
+    else
+        echo "ruff checks passed."
+        echo
+    fi
+}
+
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 SPARK_ROOT_DIR="$(dirname "${SCRIPT_DIR}")"
 
@@ -337,6 +371,10 @@ if [[ "$FLAKE8_TEST" == "true" ]]; then
 fi
 if [[ "$MYPY_TEST" == "true" ]] || [[ "$MYPY_EXAMPLES_TEST" == "true" ]] || [[ "$MYPY_DATA_TEST" == "true" ]]; then
     mypy_test
+fi
+
+if [[ "$RUFF_TEST" == "true" ]]; then
+    ruff_test
 fi
 
 echo
